@@ -5,6 +5,9 @@ import type { DashboardStats } from '../../types/finance';
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { useFilteredTransactions } from '../../hooks/useFilteredTransactions';
 import { Plus } from 'lucide-react';
+import { BalanceTrend } from './BalanceTrend';
+import { SpendingBreakdown } from './SpendingBreakdown';
+import { Insights } from './Insights';
 
 export default function Dashboard() {
   const { transactions, role } = useFinanceStore();
@@ -44,16 +47,15 @@ export default function Dashboard() {
       
       <SummaryCards stats={stats} />
       
+      <Insights transactions={transactions} />
+      
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <div className="col-span-4 border rounded-xl bg-card text-card-foreground shadow p-6 flex items-center justify-center min-h-[400px]">
-          {/* Placeholder for future charting component (e.g., Recharts) */}
-          <div className="text-muted-foreground flex flex-col items-center placeholder-animation">
-            <span className="mb-2">Monthly Revenue Chart</span>
-            <span className="text-xs">Coming soon</span>
-          </div>
-        </div>
-        
-        <div className="col-span-3">
+        <BalanceTrend transactions={filteredTransactions} />
+        <SpendingBreakdown transactions={filteredTransactions} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <div className="col-span-4 lg:col-span-7">
           <TransactionList transactions={filteredTransactions} limit={5} />
         </div>
       </div>

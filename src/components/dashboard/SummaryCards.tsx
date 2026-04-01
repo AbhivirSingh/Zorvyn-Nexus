@@ -2,6 +2,7 @@ import { ArrowDownRight, ArrowUpRight, DollarSign, CreditCard } from 'lucide-rea
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import type { DashboardStats } from '../../types/finance';
 import { formatCurrency } from '../../lib/utils';
+import { ResponsiveContainer, LineChart, Line } from 'recharts';
 
 interface SummaryCardsProps {
   stats: DashboardStats;
@@ -17,9 +18,13 @@ export function SummaryCards({ stats }: SummaryCardsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{formatCurrency(stats.totalBalance)}</div>
-          <p className="text-xs text-muted-foreground mt-1">
-            +20.1% from last month
-          </p>
+          <div className="h-8 w-full mt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={[{ val: 400 }, { val: 300 }, { val: 550 }, { val: 450 }, { val: 700 }]}>
+                <Line type="monotone" dataKey="val" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </CardContent>
       </Card>
       
@@ -30,9 +35,13 @@ export function SummaryCards({ stats }: SummaryCardsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{formatCurrency(stats.totalIncome)}</div>
-          <p className="text-xs text-muted-foreground mt-1">
-            +15% from last month
-          </p>
+          <div className="h-8 w-full mt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={[{ val: 200 }, { val: 400 }, { val: 350 }, { val: 600 }, { val: 550 }]}>
+                <Line type="monotone" dataKey="val" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </CardContent>
       </Card>
       
@@ -43,9 +52,13 @@ export function SummaryCards({ stats }: SummaryCardsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{formatCurrency(stats.totalExpense)}</div>
-          <p className="text-xs text-muted-foreground mt-1">
-            -4% from last month
-          </p>
+          <div className="h-8 w-full mt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={[{ val: 600 }, { val: 500 }, { val: 400 }, { val: 300 }, { val: 200 }]}>
+                <Line type="monotone" dataKey="val" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </CardContent>
       </Card>
       
