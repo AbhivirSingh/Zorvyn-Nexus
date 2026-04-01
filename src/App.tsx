@@ -3,15 +3,16 @@ import { Sidebar } from './components/ui/Sidebar';
 import { Navbar } from './components/ui/Navbar';
 import Dashboard from './components/dashboard/Dashboard';
 import { TransactionList } from './components/dashboard/TransactionList';
-import { mockTransactions } from './lib/mock-data';
+import { useFilteredTransactions } from './hooks/useFilteredTransactions';
 
 function TransactionsPage() {
+  const transactions = useFilteredTransactions();
   return (
     <div className="flex-1 space-y-6 p-1">
       <div className="flex items-center justify-between space-y-2 mb-6">
         <h2 className="text-3xl font-bold tracking-tight">All Transactions</h2>
       </div>
-      <TransactionList transactions={mockTransactions} />
+      <TransactionList transactions={transactions} />
     </div>
   );
 }

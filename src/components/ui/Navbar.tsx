@@ -1,6 +1,9 @@
 import { Bell, Search, User } from 'lucide-react';
+import { useFinanceStore } from '../../store/useFinanceStore';
 
 export function Navbar() {
+  const { role, setRole } = useFinanceStore();
+
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b bg-background px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex flex-1 items-center">
@@ -22,10 +25,14 @@ export function Navbar() {
         </button>
         
         <div className="flex items-center space-x-3">
-          <div className="flex flex-col items-end">
-            <span className="text-sm font-medium leading-none">Admin User</span>
-            <span className="text-xs text-muted-foreground">admin@findash.com</span>
-          </div>
+          <select 
+            value={role} 
+            onChange={(e) => setRole(e.target.value as 'Admin' | 'Viewer')}
+            className="text-sm bg-accent border-none rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-ring cursor-pointer font-medium"
+          >
+            <option value="Admin">Admin</option>
+            <option value="Viewer">Viewer</option>
+          </select>
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
             <User className="h-5 w-5 text-primary" />
           </div>
