@@ -1,0 +1,8 @@
+﻿
+> finance-dashboard-temp@0.0.0 build
+> tsc -b && vite build
+
+src/components/dashboard/Dashboard.tsx(5,10): error TS1484: 'DashboardStats' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/dashboard/SummaryCards.tsx(3,10): error TS1484: 'DashboardStats' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/dashboard/TransactionList.tsx(1,10): error TS1484: 'Transaction' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/lib/mock-data.ts(1,10): error TS1484: 'Transaction' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
