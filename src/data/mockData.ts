@@ -1,70 +1,160 @@
 import type { Transaction, Category } from './types';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from './types';
 
-/** Generates a deterministic set of realistic Indian-context transactions */
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 11);
+/** Seeded PRNG for deterministic "random" mock data */
+function seededRandom(seed: number): () => number {
+  let s = seed;
+  return () => {
+    s = (s * 16807 + 0) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
 }
 
-const MOCK_TRANSACTIONS: Transaction[] = [
-  // ===== Income =====
-  { id: generateId(), date: '2026-04-01', description: 'Monthly Salary - TCS', amount: 85000, category: 'Salary', type: 'income' },
-  { id: generateId(), date: '2026-03-01', description: 'Monthly Salary - TCS', amount: 85000, category: 'Salary', type: 'income' },
-  { id: generateId(), date: '2026-02-01', description: 'Monthly Salary - TCS', amount: 82000, category: 'Salary', type: 'income' },
-  { id: generateId(), date: '2026-01-01', description: 'Monthly Salary - TCS', amount: 82000, category: 'Salary', type: 'income' },
-  { id: generateId(), date: '2025-12-01', description: 'Monthly Salary - TCS', amount: 80000, category: 'Salary', type: 'income' },
-  { id: generateId(), date: '2025-11-01', description: 'Monthly Salary - TCS', amount: 80000, category: 'Salary', type: 'income' },
-  { id: generateId(), date: '2026-03-15', description: 'Freelance Web Dev - Upwork', amount: 25000, category: 'Freelance', type: 'income' },
-  { id: generateId(), date: '2026-01-20', description: 'React Dashboard Project', amount: 18000, category: 'Freelance', type: 'income' },
-  { id: generateId(), date: '2026-02-10', description: 'Logo Design - Fiverr', amount: 8000, category: 'Freelance', type: 'income' },
-  { id: generateId(), date: '2026-04-02', description: 'Mutual Fund Returns', amount: 3200, category: 'Investment', type: 'income' },
-  { id: generateId(), date: '2026-03-05', description: 'FD Interest - SBI', amount: 4500, category: 'Investment', type: 'income' },
-  { id: generateId(), date: '2026-01-15', description: 'Stock Dividend - Reliance', amount: 2800, category: 'Investment', type: 'income' },
+let idCounter = 0;
+function generateId(): string {
+  return `tx_${(idCounter++).toString(36).padStart(6, '0')}`;
+}
 
-  // ===== Expenses =====
-  { id: generateId(), date: '2026-04-03', description: 'Rent Payment - Hauz Khas', amount: 22000, category: 'Rent', type: 'expense' },
-  { id: generateId(), date: '2026-03-03', description: 'Rent Payment - Hauz Khas', amount: 22000, category: 'Rent', type: 'expense' },
-  { id: generateId(), date: '2026-02-03', description: 'Rent Payment - Hauz Khas', amount: 22000, category: 'Rent', type: 'expense' },
-  { id: generateId(), date: '2026-01-03', description: 'Rent Payment - Hauz Khas', amount: 22000, category: 'Rent', type: 'expense' },
-  { id: generateId(), date: '2025-12-03', description: 'Rent Payment - Hauz Khas', amount: 22000, category: 'Rent', type: 'expense' },
-  { id: generateId(), date: '2025-11-03', description: 'Rent Payment - Hauz Khas', amount: 20000, category: 'Rent', type: 'expense' },
+// ─── Expense templates for realistic descriptions ───
+const EXPENSE_TEMPLATES: Record<string, { descriptions: string[]; range: [number, number] }> = {
+  'Rent':           { descriptions: ['Rent Payment - Hauz Khas'], range: [20000, 22000] },
+  'Food & Dining':  { descriptions: ['Swiggy Order', 'Big Basket Groceries', 'Zomato Delivery', 'Dinner at Farzi Café', 'DMart Run', 'Blinkit Groceries'], range: [300, 5500] },
+  'Shopping':       { descriptions: ['Amazon Purchase', 'Myntra Sale', 'Flipkart Order', 'Croma Electronics', 'Ajio Fashion'], range: [500, 9000] },
+  'Transport':      { descriptions: ['Metro Card Recharge', 'Uber Trip', 'Ola Ride', 'Rapido Bike Taxi', 'Petrol Fill-up'], range: [200, 3000] },
+  'Utilities':      { descriptions: ['Electricity Bill - BSES', 'WiFi - Airtel', 'Mobile Recharge - Jio', 'Water Bill', 'Gas Bill'], range: [500, 2500] },
+  'Healthcare':     { descriptions: ['Apollo Pharmacy', 'Doctor Visit - Max Hospital', 'Lab Tests - SRL', 'Dental Checkup'], range: [500, 3000] },
+  'Education':      { descriptions: ['Udemy Course', 'Coursera Subscription', 'Book Purchase', 'Workshop Fee'], range: [300, 4000] },
+  'Entertainment':  { descriptions: ['Netflix Subscription', 'PVR Cinema', 'Spotify Premium', 'Gaming Purchase', 'Concert Ticket'], range: [100, 2000] },
+  'Other':          { descriptions: ['Haircut - Naturals', 'Laundry Service', 'Dry Cleaning', 'Gift Purchase', 'Charity Donation'], range: [200, 2000] },
+};
 
-  { id: generateId(), date: '2026-04-04', description: 'Swiggy - Biryani Order', amount: 450, category: 'Food & Dining', type: 'expense' },
-  { id: generateId(), date: '2026-04-02', description: 'Big Basket Groceries', amount: 3200, category: 'Food & Dining', type: 'expense' },
-  { id: generateId(), date: '2026-03-28', description: 'Dinner at Farzi Café', amount: 2800, category: 'Food & Dining', type: 'expense' },
-  { id: generateId(), date: '2026-03-20', description: 'Zomato - Weekly Meals', amount: 1600, category: 'Food & Dining', type: 'expense' },
-  { id: generateId(), date: '2026-03-10', description: 'Grocery - DMart', amount: 4500, category: 'Food & Dining', type: 'expense' },
-  { id: generateId(), date: '2026-02-15', description: 'Swiggy Orders', amount: 2200, category: 'Food & Dining', type: 'expense' },
-  { id: generateId(), date: '2026-01-12', description: 'Monthly Groceries', amount: 5500, category: 'Food & Dining', type: 'expense' },
+const INCOME_TEMPLATES: Record<string, { descriptions: string[]; range: [number, number] }> = {
+  'Salary':     { descriptions: ['Monthly Salary - TCS'], range: [78000, 86000] },
+  'Freelance':  { descriptions: ['Freelance Web Dev - Upwork', 'React Project', 'Logo Design - Fiverr', 'UI Consulting'], range: [5000, 30000] },
+  'Investment': { descriptions: ['Mutual Fund Returns', 'FD Interest - SBI', 'Stock Dividend', 'PPF Interest'], range: [1500, 6000] },
+};
 
-  { id: generateId(), date: '2026-03-22', description: 'Amazon - Headphones', amount: 4999, category: 'Shopping', type: 'expense' },
-  { id: generateId(), date: '2026-02-14', description: 'Myntra - Winter Sale', amount: 3500, category: 'Shopping', type: 'expense' },
-  { id: generateId(), date: '2026-01-26', description: 'Flipkart Republic Day Sale', amount: 8999, category: 'Shopping', type: 'expense' },
-  { id: generateId(), date: '2025-12-15', description: 'Croma - Keyboard', amount: 2499, category: 'Shopping', type: 'expense' },
+/**
+ * Generates 10 months of high-fidelity mock transaction data.
+ * Uses a seeded PRNG for deterministic output across app reloads.
+ * 
+ * Income follows a slight upward drift (salary raises).
+ * Expenses follow a random walk with category-specific volatility.
+ */
+function generateMockTransactions(): Transaction[] {
+  const rand = seededRandom(42);
+  const transactions: Transaction[] = [];
 
-  { id: generateId(), date: '2026-04-01', description: 'Delhi Metro Card Recharge', amount: 500, category: 'Transport', type: 'expense' },
-  { id: generateId(), date: '2026-03-18', description: 'Uber - Airport Trip', amount: 1200, category: 'Transport', type: 'expense' },
-  { id: generateId(), date: '2026-02-20', description: 'Ola Rides - Monthly', amount: 2800, category: 'Transport', type: 'expense' },
-  { id: generateId(), date: '2026-01-05', description: 'Rapido Bike Taxi', amount: 350, category: 'Transport', type: 'expense' },
+  // 10 months: June 2025 → April 2026 (inclusive of partial April)
+  const startMonth = new Date(2025, 5, 1); // June 2025
+  const endDate = new Date(2026, 3, 5);    // April 5, 2026
 
-  { id: generateId(), date: '2026-04-01', description: 'Electricity Bill - BSES', amount: 2400, category: 'Utilities', type: 'expense' },
-  { id: generateId(), date: '2026-03-01', description: 'WiFi - Airtel', amount: 999, category: 'Utilities', type: 'expense' },
-  { id: generateId(), date: '2026-03-05', description: 'Mobile Recharge - Jio', amount: 666, category: 'Utilities', type: 'expense' },
-  { id: generateId(), date: '2026-02-01', description: 'Electricity Bill - BSES', amount: 1800, category: 'Utilities', type: 'expense' },
+  let currentDate = new Date(startMonth);
 
-  { id: generateId(), date: '2026-03-12', description: 'Apollo Pharmacy', amount: 1200, category: 'Healthcare', type: 'expense' },
-  { id: generateId(), date: '2026-01-25', description: 'Doctor Visit - Max Hospital', amount: 1500, category: 'Healthcare', type: 'expense' },
+  while (currentDate <= endDate) {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const isPartialMonth = year === 2026 && month === 3; // April 2026 partial
+    const lastDay = isPartialMonth ? 5 : daysInMonth;
 
-  { id: generateId(), date: '2026-02-05', description: 'Udemy - React Masterclass', amount: 499, category: 'Education', type: 'expense' },
-  { id: generateId(), date: '2026-01-10', description: 'Coursera Subscription', amount: 3500, category: 'Education', type: 'expense' },
+    // ══ SALARY (1st of each month) ══
+    const salaryBase = 78000 + Math.floor(((year - 2025) * 12 + month - 5) * 800); // Gentle raise over time
+    const salaryVariation = Math.round((rand() - 0.5) * 4000);
+    transactions.push({
+      id: generateId(),
+      date: `${year}-${String(month + 1).padStart(2, '0')}-01`,
+      description: 'Monthly Salary - TCS',
+      amount: salaryBase + salaryVariation,
+      category: 'Salary',
+      type: 'income',
+    });
 
-  { id: generateId(), date: '2026-03-30', description: 'Netflix Subscription', amount: 649, category: 'Entertainment', type: 'expense' },
-  { id: generateId(), date: '2026-03-25', description: 'PVR Cinema - Dune 3', amount: 850, category: 'Entertainment', type: 'expense' },
-  { id: generateId(), date: '2026-02-28', description: 'Spotify Premium', amount: 119, category: 'Entertainment', type: 'expense' },
-  { id: generateId(), date: '2026-01-20', description: 'Book - Atomic Habits', amount: 350, category: 'Entertainment', type: 'expense' },
+    // ══ FREELANCE (0-2 per month, random days) ══
+    const freelanceCount = rand() < 0.3 ? 0 : rand() < 0.6 ? 1 : 2;
+    for (let f = 0; f < freelanceCount; f++) {
+      const day = Math.min(Math.floor(rand() * lastDay) + 1, lastDay);
+      const tmpl = INCOME_TEMPLATES['Freelance'];
+      transactions.push({
+        id: generateId(),
+        date: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        description: tmpl.descriptions[Math.floor(rand() * tmpl.descriptions.length)],
+        amount: Math.round(tmpl.range[0] + rand() * (tmpl.range[1] - tmpl.range[0])),
+        category: 'Freelance',
+        type: 'income',
+      });
+    }
 
-  { id: generateId(), date: '2026-03-08', description: 'Haircut - Naturals', amount: 500, category: 'Other', type: 'expense' },
-  { id: generateId(), date: '2026-02-22', description: 'Laundry Service', amount: 800, category: 'Other', type: 'expense' },
-];
+    // ══ INVESTMENT RETURNS (0-1 per month) ══
+    if (rand() > 0.4) {
+      const day = Math.min(Math.floor(rand() * lastDay) + 1, lastDay);
+      const tmpl = INCOME_TEMPLATES['Investment'];
+      transactions.push({
+        id: generateId(),
+        date: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        description: tmpl.descriptions[Math.floor(rand() * tmpl.descriptions.length)],
+        amount: Math.round(tmpl.range[0] + rand() * (tmpl.range[1] - tmpl.range[0])),
+        category: 'Investment',
+        type: 'income',
+      });
+    }
+
+    // ══ EXPENSES ══
+    // Rent — always on the 3rd
+    if (3 <= lastDay) {
+      transactions.push({
+        id: generateId(),
+        date: `${year}-${String(month + 1).padStart(2, '0')}-03`,
+        description: 'Rent Payment - Hauz Khas',
+        amount: 20000 + Math.round(rand() * 2000),
+        category: 'Rent',
+        type: 'expense',
+      });
+    }
+
+    // Other expense categories — variable frequency
+    const variableCategories: Category[] = ['Food & Dining', 'Shopping', 'Transport', 'Utilities', 'Healthcare', 'Education', 'Entertainment', 'Other'];
+    const categoryFrequency: Record<string, number> = {
+      'Food & Dining': 4, 'Shopping': 1.5, 'Transport': 2, 'Utilities': 1.5,
+      'Healthcare': 0.5, 'Education': 0.4, 'Entertainment': 1.5, 'Other': 0.8,
+    };
+
+    for (const cat of variableCategories) {
+      const avgCount = categoryFrequency[cat] || 1;
+      // Scale down for partial months
+      const scaledCount = isPartialMonth ? avgCount * (5 / 30) : avgCount;
+      const count = Math.round(scaledCount + (rand() - 0.5) * avgCount * 0.6);
+      
+      for (let e = 0; e < Math.max(0, count); e++) {
+        const day = Math.min(Math.floor(rand() * lastDay) + 1, lastDay);
+        const tmpl = EXPENSE_TEMPLATES[cat];
+        if (!tmpl) continue;
+        
+        // Random walk volatility: some months have spending spikes
+        const volatilityMultiplier = 0.7 + rand() * 0.6; // 70%–130% of base
+        const amount = Math.round((tmpl.range[0] + rand() * (tmpl.range[1] - tmpl.range[0])) * volatilityMultiplier);
+        
+        transactions.push({
+          id: generateId(),
+          date: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+          description: tmpl.descriptions[Math.floor(rand() * tmpl.descriptions.length)],
+          amount,
+          category: cat,
+          type: 'expense',
+        });
+      }
+    }
+
+    // Advance to next month
+    currentDate = new Date(year, month + 1, 1);
+  }
+
+  // Sort by date descending (newest first)
+  transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return transactions;
+}
+
+const MOCK_TRANSACTIONS = generateMockTransactions();
 
 export function getInitialTransactions(): Transaction[] {
   return MOCK_TRANSACTIONS.map(t => ({ ...t }));

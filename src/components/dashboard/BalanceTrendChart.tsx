@@ -8,12 +8,12 @@ import { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { ChartSkeleton } from '../insights/ChartSkeleton';
 import { TrendingUp } from 'lucide-react';
-import type { MonthlyData } from '../../data/types';
+import type { TimeSeriesPoint } from '../../data/types';
 
 type ChartView = 'balance' | 'comparison';
 
 interface BalanceTrendChartProps {
-  data?: MonthlyData[];
+  data?: TimeSeriesPoint[];
   isLoading?: boolean;
 }
 
@@ -91,10 +91,14 @@ export function BalanceTrendChart({ data, isLoading }: BalanceTrendChartProps) {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                   <XAxis
-                    dataKey="month"
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                    dataKey="label"
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                     axisLine={false}
                     tickLine={false}
+                    interval={monthlyData.length > 15 ? Math.floor(monthlyData.length / 8) : 0}
+                    angle={monthlyData.length > 10 ? -30 : 0}
+                    textAnchor={monthlyData.length > 10 ? 'end' : 'middle'}
+                    height={monthlyData.length > 10 ? 45 : 30}
                   />
                   <YAxis
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
@@ -110,7 +114,7 @@ export function BalanceTrendChart({ data, isLoading }: BalanceTrendChartProps) {
                     stroke="hsl(var(--primary))"
                     strokeWidth={2.5}
                     fill="url(#balanceGradient)"
-                    dot={{ fill: 'hsl(var(--primary))', r: 4, strokeWidth: 0 }}
+                    dot={monthlyData.length <= 15 ? { fill: 'hsl(var(--primary))', r: 3, strokeWidth: 0 } : false}
                     activeDot={{ r: 6, strokeWidth: 2, stroke: 'hsl(var(--background))' }}
                   />
                 </AreaChart>
@@ -118,10 +122,14 @@ export function BalanceTrendChart({ data, isLoading }: BalanceTrendChartProps) {
                 <BarChart data={monthlyData} barGap={4}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                   <XAxis
-                    dataKey="month"
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                    dataKey="label"
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                     axisLine={false}
                     tickLine={false}
+                    interval={monthlyData.length > 15 ? Math.floor(monthlyData.length / 8) : 0}
+                    angle={monthlyData.length > 10 ? -30 : 0}
+                    textAnchor={monthlyData.length > 10 ? 'end' : 'middle'}
+                    height={monthlyData.length > 10 ? 45 : 30}
                   />
                   <YAxis
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}

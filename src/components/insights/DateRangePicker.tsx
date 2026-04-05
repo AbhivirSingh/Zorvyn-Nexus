@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useStore } from '../../store/useStore';
 import { Button } from '../ui/button';
@@ -16,12 +16,10 @@ const PRESETS = [
 ] as const;
 
 function getPresetRange(preset: Preset): { start: string; end: string } | null {
-  const now = new Date(2026, 3, 5); // Base reference to April 5, 2026 for consistency with mock data
-  
+  const now = new Date(2026, 3, 5);
   if (preset === 'all') return null;
   if (preset === '7d') {
-    const start = new Date(now);
-    start.setDate(now.getDate() - 7);
+    const start = new Date(now); start.setDate(now.getDate() - 7);
     return { start: start.toISOString(), end: now.toISOString() };
   }
   if (preset === 'this_month') {
@@ -35,28 +33,105 @@ function getPresetRange(preset: Preset): { start: string; end: string } | null {
   return null;
 }
 
+// ─── useOutsideClick ───────────────────────────────────────────────
+function useOutsideClick(ref: React.RefObject<HTMLElement | null>, handler: () => void, enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    const listener = (e: MouseEvent | TouchEvent) => {
+      if (!ref.current || ref.current.contains(e.target as Node)) return;
+      handler();
+    };
+    document.addEventListener('mousedown', listener);
+    document.addEventListener('touchstart', listener);
+    return () => {
+      document.removeEventListener('mousedown', listener);
+      document.removeEventListener('touchstart', listener);
+    };
+  }, [ref, handler, enabled]);
+}
+
+// ─── DateRangePicker ───────────────────────────────────────────────
 export function DateRangePicker({ onRangeChange }: { onRangeChange: () => void }) {
-  const [activePreset, setActivePreset] = useState<Preset>('all');
   const setInsightsDateRange = useStore((s) => s.setInsightsDateRange);
 
-  const handlePresetClick = (preset: Preset) => {
-    if (activePreset === preset) return; // Ignore clicking same preset
-    setActivePreset(preset);
-    
-    if (preset !== 'custom') {
-      setInsightsDateRange(getPresetRange(preset));
-      onRangeChange();
-    }
-  };
+  // Which preset pill is currently highlighted
+  const [activePreset, setActivePreset] = useState<Preset>('all');
 
-  const handleCustomApply = (start: Date, end: Date) => {
-    setInsightsDateRange({ start: start.toISOString(), end: end.toISOString() });
+  // Whether the calendar dropdown is open (independent of activePreset)
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+
+  // The last successfully committed custom range (for reversion on abandon)
+  const [committedCustomRange, setCommittedCustomRange] = useState<{ start: Date; end: Date } | null>(null);
+
+  // Track the preset we had before opening custom, for reversion
+  const presetBeforeCustom = useRef<Preset>('all');
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // ── Close & Revert logic ──
+  const closeAndRevert = useCallback(() => {
+    if (!isCalendarOpen) return;
+    setIsCalendarOpen(false);
+
+    // If we had a committed custom range, keep pill on "custom" — data is still filtered
+    if (committedCustomRange) return;
+
+    // No committed custom range → revert pill + data to the previous preset
+    setActivePreset(presetBeforeCustom.current);
+    setInsightsDateRange(getPresetRange(presetBeforeCustom.current));
+    onRangeChange();
+  }, [isCalendarOpen, committedCustomRange, setInsightsDateRange, onRangeChange]);
+
+  // Outside click handler (only active when calendar is open)
+  useOutsideClick(containerRef, closeAndRevert, isCalendarOpen);
+
+  // Esc key handler
+  useEffect(() => {
+    if (!isCalendarOpen) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeAndRevert();
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [isCalendarOpen, closeAndRevert]);
+
+  // ── Preset click handler ──
+  const handlePresetClick = (preset: Preset) => {
+    if (preset === 'custom') {
+      if (isCalendarOpen) {
+        // Clicking Custom again while open → toggle close (revert)
+        closeAndRevert();
+        return;
+      }
+      // Opening custom: remember current preset for reversion
+      if (activePreset !== 'custom') {
+        presetBeforeCustom.current = activePreset;
+      }
+      setActivePreset('custom');
+      setIsCalendarOpen(true);
+      return;
+    }
+
+    // Clicking a non-custom preset
+    setIsCalendarOpen(false);             // Close calendar if open
+    setActivePreset(preset);
+    setCommittedCustomRange(null);        // Clear any prior custom commitment
+    setInsightsDateRange(getPresetRange(preset));
     onRangeChange();
   };
 
+  // ── Custom Apply (Commit & Close) ──
+  const handleCustomApply = useCallback((start: Date, end: Date) => {
+    setCommittedCustomRange({ start, end });
+    setInsightsDateRange({ start: start.toISOString(), end: end.toISOString() });
+    setIsCalendarOpen(false);  // Commit & Close
+    onRangeChange();
+  }, [setInsightsDateRange, onRangeChange]);
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="inline-flex items-center p-1 bg-muted/30 rounded-xl overflow-hidden self-start">
+    <div className="flex flex-col gap-4 items-end w-fit ml-auto" ref={containerRef}>
+      {/* Preset Bar */}
+      <div className="inline-flex items-center p-1 bg-muted/30 rounded-xl overflow-hidden">
         {PRESETS.map((preset) => (
           <button
             key={preset.id}
@@ -78,16 +153,20 @@ export function DateRangePicker({ onRangeChange }: { onRangeChange: () => void }
         ))}
       </div>
 
-      <AnimatePresence mode="popLayout">
-        {activePreset === 'custom' && (
+      {/* Calendar Dropdown */}
+      <AnimatePresence>
+        {isCalendarOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0, scale: 0.95 }}
             animate={{ opacity: 1, height: 'auto', scale: 1 }}
             exit={{ opacity: 0, height: 0, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="self-start origin-top"
+            className="origin-top-right"
           >
-            <CustomCalendar onApply={handleCustomApply} />
+            <CustomCalendar
+              onApply={handleCustomApply}
+              committedRange={committedCustomRange}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -95,11 +174,24 @@ export function DateRangePicker({ onRangeChange }: { onRangeChange: () => void }
   );
 }
 
-function CustomCalendar({ onApply }: { onApply: (start: Date, end: Date) => void }) {
-  const today = new Date(2026, 3, 5); // April 2026 context
-  const [currentMonth, setCurrentMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
-  const [start, setStart] = useState<Date | null>(null);
-  const [end, setEnd] = useState<Date | null>(null);
+// ─── CustomCalendar ────────────────────────────────────────────────
+function CustomCalendar({
+  onApply,
+  committedRange,
+}: {
+  onApply: (start: Date, end: Date) => void;
+  committedRange: { start: Date; end: Date } | null;
+}) {
+  const today = new Date(2026, 3, 5);
+  const [currentMonth, setCurrentMonth] = useState(
+    committedRange?.start
+      ? new Date(committedRange.start.getFullYear(), committedRange.start.getMonth(), 1)
+      : new Date(today.getFullYear(), today.getMonth(), 1)
+  );
+
+  // Initialize from committed range (reversion support)
+  const [start, setStart] = useState<Date | null>(committedRange?.start ?? null);
+  const [end, setEnd] = useState<Date | null>(committedRange?.end ?? null);
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
 
   const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
@@ -140,20 +232,24 @@ function CustomCalendar({ onApply }: { onApply: (start: Date, end: Date) => void
   return (
     <div className="glass-card p-4 rounded-xl border border-border shadow-lg flex flex-col w-[320px]">
       <div className="flex items-center justify-between mb-4">
-        <button onClick={prevMonth} className="p-1 hover:bg-muted rounded-md text-muted-foreground"><ChevronLeft size={16} /></button>
+        <button onClick={prevMonth} className="p-1 hover:bg-muted rounded-md text-muted-foreground" aria-label="Previous month">
+          <ChevronLeft size={16} />
+        </button>
         <span className="text-sm font-medium">
           {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
         </span>
-        <button onClick={nextMonth} className="p-1 hover:bg-muted rounded-md text-muted-foreground"><ChevronRight size={16} /></button>
+        <button onClick={nextMonth} className="p-1 hover:bg-muted rounded-md text-muted-foreground" aria-label="Next month">
+          <ChevronRight size={16} />
+        </button>
       </div>
       
-      <div className="grid grid-cols-7 gap-1 text-center mb-2">
+      <div className="grid grid-cols-7 gap-1 text-center mb-2" role="row">
         {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-          <div key={d} className="text-[10px] uppercase font-medium text-muted-foreground py-1">{d}</div>
+          <div key={d} className="text-[10px] uppercase font-medium text-muted-foreground py-1" role="columnheader">{d}</div>
         ))}
       </div>
       
-      <div className="grid grid-cols-7 gap-y-1 text-center">
+      <div className="grid grid-cols-7 gap-y-1 text-center" role="grid" aria-label="Calendar">
         {Array.from({ length: firstDayIndex }).map((_, i) => <div key={`empty-${i}`} />)}
         
         {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -173,6 +269,8 @@ function CustomCalendar({ onApply }: { onApply: (start: Date, end: Date) => void
                 onClick={() => handleDateClick(day)}
                 onMouseEnter={() => setHoverDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day))}
                 onMouseLeave={() => setHoverDate(null)}
+                aria-label={`${currentMonth.toLocaleDateString('en-US', { month: 'long' })} ${day}`}
+                aria-selected={selected}
                 className={cn(
                   "relative z-10 w-7 h-7 mx-auto flex items-center justify-center rounded-full text-xs font-medium transition-colors",
                   selected ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-muted text-foreground"
@@ -188,7 +286,7 @@ function CustomCalendar({ onApply }: { onApply: (start: Date, end: Date) => void
       <div className="mt-4 pt-3 border-t border-border flex justify-between items-center">
         <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-1 break-words">
            <CalendarIcon size={12} />
-           {start ? start.toLocaleDateString() : 'Start'} - {end ? end.toLocaleDateString() : 'End'}
+           {start ? start.toLocaleDateString() : 'Start'} – {end ? end.toLocaleDateString() : 'End'}
         </div>
         <Button 
           size="sm" 

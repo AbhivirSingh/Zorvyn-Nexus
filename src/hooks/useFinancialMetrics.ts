@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import type { FinancialMetrics, MonthlyData, CategoryBreakdown, Transaction } from '../data/types';
+import type { FinancialMetrics, MonthlyData, CategoryBreakdown, Transaction, TimeSeriesPoint } from '../data/types';
 import { CATEGORY_COLORS } from '../data/types';
 
 /**
@@ -50,41 +50,148 @@ export function useFinancialMetrics(customTransactions?: Transaction[]): Financi
 }
 
 /**
- * Monthly income/expense/balance data for trend charts.
- * Returns last 6 months of aggregated data.
+ * Adaptive Time-Series Aggregator.
+ * Dynamically bins transaction data into days, weeks, months, or years
+ * based on the span of the provided transaction date range.
+ *
+ * Tick intervals:
+ *   ≤20 days   → Daily   (e.g., "Mon 01", "Tue 02")
+ *   ≤5 months  → Weekly  (e.g., "Week 1 (Mar)", "Week 2 (Mar)")
+ *   ≤4 years   → Monthly (e.g., "Jan '26", "Feb '26")
+ *   >4 years   → Yearly  (e.g., "2025", "2026")
  */
-export function useMonthlyData(customTransactions?: Transaction[]): MonthlyData[] {
+export type TimeScale = 'day' | 'week' | 'month' | 'year';
+
+function detectTimeScale(transactions: Transaction[]): { scale: TimeScale; minDate: Date; maxDate: Date } {
+  if (transactions.length === 0) {
+    const now = new Date(2026, 3, 5);
+    return { scale: 'month', minDate: now, maxDate: now };
+  }
+
+  const dates = transactions.map(t => new Date(t.date).getTime());
+  const minDate = new Date(Math.min(...dates));
+  const maxDate = new Date(Math.max(...dates));
+  const spanDays = Math.max(1, Math.round((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+  let scale: TimeScale;
+  if (spanDays <= 20) scale = 'day';
+  else if (spanDays <= 150) scale = 'week'; // ~5 months
+  else if (spanDays <= 1460) scale = 'month'; // ~4 years
+  else scale = 'year';
+
+  return { scale, minDate, maxDate };
+}
+
+const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function getBinKey(date: Date, scale: TimeScale): string {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const d = date.getDate();
+
+  switch (scale) {
+    case 'day':
+      return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    case 'week': {
+      // ISO week-based: group by the Monday of each week
+      const dayOfWeek = date.getDay(); // 0=Sun
+      const monday = new Date(y, m, d - ((dayOfWeek + 6) % 7));
+      return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+    }
+    case 'month':
+      return `${y}-${String(m + 1).padStart(2, '0')}`;
+    case 'year':
+      return `${y}`;
+  }
+}
+
+function getBinLabel(key: string, scale: TimeScale): string {
+  switch (scale) {
+    case 'day': {
+      const d = new Date(key + 'T00:00:00');
+      return `${DAYS_SHORT[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}`;
+    }
+    case 'week': {
+      const d = new Date(key + 'T00:00:00');
+      // Calculate which week of the month this is (1-based)
+      const weekNum = Math.ceil(d.getDate() / 7);
+      return `Wk ${weekNum} (${MONTHS_SHORT[d.getMonth()]})`;
+    }
+    case 'month': {
+      const [y, mStr] = key.split('-');
+      const m = parseInt(mStr) - 1;
+      return `${MONTHS_SHORT[m]} '${y.slice(2)}`;
+    }
+    case 'year':
+      return key;
+  }
+}
+
+function generateBinKeys(minDate: Date, maxDate: Date, scale: TimeScale): string[] {
+  const keys: string[] = [];
+  const cursor = new Date(minDate);
+
+  // Align cursor to the start of its bin
+  if (scale === 'day') {
+    cursor.setHours(0, 0, 0, 0);
+  } else if (scale === 'week') {
+    const dayOfWeek = cursor.getDay();
+    cursor.setDate(cursor.getDate() - ((dayOfWeek + 6) % 7));
+  } else if (scale === 'month') {
+    cursor.setDate(1);
+  } else if (scale === 'year') {
+    cursor.setMonth(0, 1);
+  }
+
+  while (cursor <= maxDate) {
+    keys.push(getBinKey(cursor, scale));
+
+    // Advance cursor
+    if (scale === 'day') cursor.setDate(cursor.getDate() + 1);
+    else if (scale === 'week') cursor.setDate(cursor.getDate() + 7);
+    else if (scale === 'month') cursor.setMonth(cursor.getMonth() + 1);
+    else if (scale === 'year') cursor.setFullYear(cursor.getFullYear() + 1);
+  }
+
+  // Deduplicate (week bins can overlap at boundaries)
+  return [...new Set(keys)];
+}
+
+export function useTimeSeriesData(customTransactions?: Transaction[]): TimeSeriesPoint[] {
   const allTransactions = useStore((s) => s.transactions);
   const transactions = customTransactions || allTransactions;
 
   return useMemo(() => {
-    const monthMap = new Map<string, { income: number; expenses: number }>();
+    if (transactions.length === 0) return [];
 
-    // Generate last 6 months
-    const now = new Date(2026, 3, 5); // April 2026 context
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      monthMap.set(key, { income: 0, expenses: 0 });
+    const { scale, minDate, maxDate } = detectTimeScale(transactions);
+    const binKeys = generateBinKeys(minDate, maxDate, scale);
+
+    // Initialize bins
+    const bins = new Map<string, { income: number; expenses: number }>();
+    for (const key of binKeys) {
+      bins.set(key, { income: 0, expenses: 0 });
     }
 
-    transactions.forEach((t) => {
-      const key = t.date.substring(0, 7);
-      const entry = monthMap.get(key);
-      if (entry) {
-        if (t.type === 'income') entry.income += t.amount;
-        else entry.expenses += t.amount;
+    // Aggregate transactions into bins
+    for (const t of transactions) {
+      const date = new Date(t.date);
+      const key = getBinKey(date, scale);
+      const bin = bins.get(key);
+      if (bin) {
+        if (t.type === 'income') bin.income += t.amount;
+        else bin.expenses += t.amount;
       }
-    });
+    }
 
+    // Build output with running balance
     let runningBalance = 0;
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    return Array.from(monthMap.entries()).map(([key, data]) => {
-      const monthIdx = parseInt(key.split('-')[1]) - 1;
+    return binKeys.map(key => {
+      const data = bins.get(key)!;
       runningBalance += data.income - data.expenses;
       return {
-        month: months[monthIdx],
+        label: getBinLabel(key, scale),
         income: data.income,
         expenses: data.expenses,
         balance: runningBalance,
@@ -92,6 +199,10 @@ export function useMonthlyData(customTransactions?: Transaction[]): MonthlyData[
     });
   }, [transactions]);
 }
+
+/** @deprecated Alias for backwards compatibility */
+export const useMonthlyData = useTimeSeriesData;
+
 
 /**
  * Spending breakdown by category for pie/donut charts.

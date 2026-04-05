@@ -41,12 +41,15 @@ export interface FinancialMetrics {
   healthScore: number;
 }
 
-export interface MonthlyData {
-  month: string;       // "Jan", "Feb", etc.
+export interface TimeSeriesPoint {
+  label: string;       // Adaptive: "Mon 01", "Week 1 (Mar)", "Jan '26", "2025"
   income: number;
   expenses: number;
   balance: number;
 }
+
+/** @deprecated Use TimeSeriesPoint instead */
+export type MonthlyData = TimeSeriesPoint;
 
 export interface CategoryBreakdown {
   category: Category;
