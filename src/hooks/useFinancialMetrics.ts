@@ -29,14 +29,45 @@ export function useFinancialMetrics(customTransactions?: Transaction[]): Financi
     ).size;
     const avgMonthlyExpense = monthsWithExpenses > 0 ? totalExpenses / monthsWithExpenses : 0;
 
-    // Health score: weighted formula (0-100)
-    // 40% savings rate, 30% spending consistency, 20% category diversity, 10% balance trend
-    const savingsScore = Math.min(savingsRate / 50 * 40, 40); // Max 40 pts at 50%+ savings
-    const consistencyScore = monthsWithExpenses >= 3 ? 25 : monthsWithExpenses * 8; // Regular tracking
+    // Health score: weighted formula (0-100) with realistic variance
+    // Components: savings discipline, spending consistency, diversity, balance trend, volatility penalty
+
+    // 1. Savings discipline (max 30 pts) — less generous cap
+    const savingsScore = Math.min(savingsRate / 40 * 25, 30); // Need 40%+ savings for full marks
+
+    // 2. Spending consistency (max 20 pts) — penalize erratic spending
+    const monthlyExpenses = new Map<string, number>();
+    transactions.filter(t => t.type === 'expense').forEach(t => {
+      const key = t.date.substring(0, 7);
+      monthlyExpenses.set(key, (monthlyExpenses.get(key) || 0) + t.amount);
+    });
+    const expenseAmounts = Array.from(monthlyExpenses.values());
+    const avgExp = expenseAmounts.length > 0 ? expenseAmounts.reduce((a, b) => a + b, 0) / expenseAmounts.length : 0;
+    const variance = expenseAmounts.length > 1
+      ? Math.sqrt(expenseAmounts.reduce((s, v) => s + Math.pow(v - avgExp, 2), 0) / expenseAmounts.length) / (avgExp || 1)
+      : 0;
+    // Low variance (< 0.15) = high consistency. High variance = penalty
+    const consistencyScore = Math.max(0, 20 - variance * 40);
+
+    // 3. Category diversity (max 15 pts)
     const categories = new Set(transactions.filter(t => t.type === 'expense').map(t => t.category));
-    const diversityScore = Math.min(categories.size * 3, 20); // Diversified spending
-    const balanceScore = totalBalance > 0 ? 15 : totalBalance > -10000 ? 8 : 0;
-    const healthScore = Math.round(Math.min(savingsScore + consistencyScore + diversityScore + balanceScore, 100));
+    const diversityScore = Math.min(categories.size * 2, 15);
+
+    // 4. Positive balance trend (max 15 pts)
+    const balanceScore = totalBalance > 0 ? Math.min(totalBalance / totalIncome * 30, 15) : 0;
+
+    // 5. Spending concentration penalty (0 to -10 pts)
+    // If one category > 40% of expenses, deduct points
+    const catTotals = new Map<string, number>();
+    transactions.filter(t => t.type === 'expense').forEach(t => {
+      catTotals.set(t.category, (catTotals.get(t.category) || 0) + t.amount);
+    });
+    const maxCatPct = totalExpenses > 0 ? Math.max(...Array.from(catTotals.values())) / totalExpenses * 100 : 0;
+    const concentrationPenalty = maxCatPct > 40 ? Math.min((maxCatPct - 40) * 0.3, 10) : 0;
+
+    const healthScore = Math.round(
+      Math.max(0, Math.min(savingsScore + consistencyScore + diversityScore + balanceScore - concentrationPenalty, 100))
+    );
 
     return {
       totalBalance,

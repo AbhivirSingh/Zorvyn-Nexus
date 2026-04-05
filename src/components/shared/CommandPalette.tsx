@@ -5,6 +5,7 @@ import { useStore } from '../../store/useStore';
 import { useLocation } from 'wouter';
 import { formatINR } from '../../data/mockData';
 import { cn } from '../../lib/utils';
+import { exportTransactionsCSV } from '../../lib/exportCSV';
 
 interface CommandItem {
   id: string;
@@ -44,14 +45,7 @@ export function CommandPalette() {
       { id: 'action-theme', label: theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode', icon: theme === 'dark' ? Sun : Moon, action: toggleTheme, group: 'Actions' },
       { id: 'action-admin', label: 'Switch to Admin', icon: Shield, action: () => setRole('admin'), group: 'Actions' },
       { id: 'action-viewer', label: 'Switch to Viewer', icon: Eye, action: () => setRole('viewer'), group: 'Actions' },
-      { id: 'action-export', label: 'Export CSV', icon: Download, action: () => {
-        const txs = useStore.getState().transactions;
-        const csv = ['Date,Description,Amount,Category,Type', ...txs.map(t => `${t.date},${t.description},${t.amount},${t.category},${t.type}`)].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = 'zorvyn-transactions.csv'; a.click();
-        URL.revokeObjectURL(url);
-      }, group: 'Actions' },
+      { id: 'action-export', label: 'Export CSV', icon: Download, action: () => exportTransactionsCSV(), group: 'Actions' },
     ];
 
     // Add recent transactions as searchable items

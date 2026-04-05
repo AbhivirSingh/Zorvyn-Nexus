@@ -5,6 +5,7 @@ import { useRole } from '../../hooks/useRole';
 import { useFinancialAlerts } from '../../hooks/useFinancialMetrics';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../lib/utils';
+import { exportTransactionsCSV } from '../../lib/exportCSV';
 
 interface HeaderProps {
   title: string;
@@ -19,20 +20,6 @@ export function Header({ title }: HeaderProps) {
   const { role } = useRole();
   const alerts = useFinancialAlerts();
   const undismissedCount = alerts.length;
-
-  const handleExportCSV = () => {
-    const transactions = useStore.getState().transactions;
-    const headers = ['Date', 'Description', 'Amount', 'Category', 'Type'];
-    const rows = transactions.map((t) => [t.date, t.description, t.amount, t.category, t.type]);
-    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'zorvyn-transactions.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   return (
     <header className="h-16 border-b border-border flex items-center justify-between px-4 md:px-6 bg-background/80 backdrop-blur-sm sticky top-0 z-20">
@@ -88,7 +75,7 @@ export function Header({ title }: HeaderProps) {
         {/* Export */}
         <button
           data-testid="button-export"
-          onClick={handleExportCSV}
+          onClick={() => exportTransactionsCSV()}
           className="p-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground"
           aria-label="Export transactions as CSV"
           title="Export CSV"
