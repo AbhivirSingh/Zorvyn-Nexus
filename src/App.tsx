@@ -1,49 +1,85 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Sidebar } from './components/ui/Sidebar';
-import { Navbar } from './components/ui/Navbar';
-import Dashboard from './components/dashboard/Dashboard';
-import { TransactionsTable } from './components/dashboard/TransactionsTable';
+import { Switch, Route, Router, useLocation } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
+import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Sidebar } from "./components/layout/Sidebar";
+import { Header } from "./components/layout/Header";
+import { MobileNav } from "./components/layout/MobileNav";
+import { MobileSidebar } from "./components/layout/MobileSidebar";
+import { CommandPalette } from "./components/shared/CommandPalette";
+import { NotificationPanel } from "./components/shared/NotificationPanel";
+import OverviewPage from "./pages/overview";
+import TransactionsPage from "./pages/transactions";
+import InsightsPage from "./pages/insights";
+import NotFound from "@/pages/not-found";
+import { useTheme } from "./hooks/useTheme";
 
-function TransactionsPage() {
-  return (
-    <div className="flex-1 space-y-6 p-1">
-      <div className="flex items-center justify-between space-y-2 mb-6">
-        <h2 className="text-3xl font-bold tracking-tight">All Transactions</h2>
-      </div>
-      <TransactionsTable />
-    </div>
-  );
-}
+/** Maps routes to page titles for the header */
+const PAGE_TITLES: Record<string, string> = {
+  '/': 'Overview',
+  '/transactions': 'Transactions',
+  '/insights': 'Insights',
+};
 
-function Layout({ children }: { children: React.ReactNode }) {
+function AppLayout() {
+  // Initialize theme system
+  useTheme();
+  const [location] = useLocation();
+  const title = PAGE_TITLES[location] || 'Zorvyn Nexus';
+
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
+      {/* Skip to content — A11y */}
+      <a href="#main-content" className="skip-link" tabIndex={0}>
+        Skip to content
+      </a>
+
+      {/* Desktop sidebar */}
       <Sidebar />
-      <div className="flex-1 md:ml-64 flex flex-col min-h-screen transition-all duration-300 ease-in-out">
-        <Navbar />
-        <main className="flex-1 p-6 lg:p-10 bg-[#F8F9FA] dark:bg-background">
-          {children}
+
+      {/* Mobile sidebar overlay */}
+      <MobileSidebar />
+
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header title={title} />
+
+        <main
+          id="main-content"
+          className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6"
+          role="main"
+        >
+          <Switch>
+            <Route path="/" component={OverviewPage} />
+            <Route path="/transactions" component={TransactionsPage} />
+            <Route path="/insights" component={InsightsPage} />
+            <Route component={NotFound} />
+          </Switch>
         </main>
       </div>
+
+      {/* Mobile bottom nav */}
+      <MobileNav />
+
+      {/* Global overlays */}
+      <CommandPalette />
+      <NotificationPanel />
     </div>
   );
 }
 
 function App() {
   return (
-    <Router>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/transactions" element={<TransactionsPage />} />
-          <Route path="*" element={
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-              Page not found (placeholder)
-            </div>
-          } />
-        </Routes>
-      </Layout>
-    </Router>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Router hook={useHashLocation}>
+          <AppLayout />
+        </Router>
+      </TooltipProvider>
+    </QueryClientProvider>
   );
 }
 
