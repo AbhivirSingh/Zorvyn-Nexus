@@ -1,14 +1,73 @@
-import { motion } from 'framer-motion';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { useState, useCallback } from 'react';
+import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { useCategoryBreakdown } from '../../hooks/useFinancialMetrics';
 import { formatINR } from '../../data/mockData';
+import { cn } from '../../lib/utils';
+
+function ChartTooltip({ item }: { item: any }) {
+  const xOffset = useMotionValue("-50%");
+  const pointerX = useMotionValue("-50%");
+
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    if (node) {
+      // Synchronous DOM measurement before browser paints the first visible frame
+      const rect = node.getBoundingClientRect();
+      const padding = 12;
+      
+      let shift = 0;
+      if (rect.right > window.innerWidth - padding) {
+        shift = (window.innerWidth - padding) - rect.right;
+      } else if (rect.left < padding) {
+        shift = padding - rect.left;
+      }
+
+      if (shift !== 0) {
+        // Adjust the tooltip wrapper position instantly
+        xOffset.set(`calc(-50% + ${shift}px)`);
+        
+        // Counter-adjust the pointer arrow so it stays anchored to the hovered segment
+        const maxShift = (rect.width / 2) - 12; 
+        const boundedPointerShift = Math.max(Math.min(-shift, maxShift), -maxShift);
+        pointerX.set(`calc(-50% + ${boundedPointerShift}px)`);
+      }
+    }
+  }, [xOffset, pointerX]);
+
+  return (
+    <motion.div
+      ref={ref}
+      style={{ x: xOffset }}
+      initial={{ opacity: 0, y: 12, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 8, scale: 0.95 }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
+      className="absolute bottom-full top-auto mb-3 px-3 py-1.5 bg-[#18181b] dark:bg-[#27272a] text-white text-[11px] font-medium rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-50 pointer-events-none"
+    >
+      <div className="flex items-center gap-2">
+        <div 
+          className="w-2 h-2 rounded-full" 
+          style={{ backgroundColor: item.color, boxShadow: `0 0 6px ${item.color}80` }} 
+        />
+        <span>{item.category}</span>
+        <span className="opacity-60 ml-0.5 tabular-nums">{item.percentage.toFixed(1)}%</span>
+      </div>
+      
+      {/* Tooltip subtle pointer logic */}
+      <motion.div 
+        style={{ x: pointerX }}
+        className="absolute top-full left-1/2 border-4 border-transparent border-t-[#18181b] dark:border-t-[#27272a]" 
+      />
+    </motion.div>
+  );
+}
 
 export function SpendingBreakdown() {
   const data = useCategoryBreakdown();
+  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
 
   if (data.length === 0) {
     return (
-      <div className="glass-card rounded-xl p-5 flex items-center justify-center h-full text-sm text-muted-foreground">
+      <div className="glass-card rounded-xl p-5 flex items-center justify-center h-[400px] text-sm text-muted-foreground">
         No expense data to display
       </div>
     );
@@ -19,77 +78,97 @@ export function SpendingBreakdown() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.25 }}
-      className="glass-card rounded-xl p-5"
+      className="glass-card rounded-xl p-5 flex flex-col h-[400px] md:h-full relative overflow-visible"
       data-testid="chart-spending-breakdown"
     >
-      <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-4">
+      <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-6 flex-shrink-0">
         Spending Breakdown
       </h3>
 
-      <div className="flex flex-col md:flex-row items-center gap-4">
-        {/* Donut chart */}
-        <div className="w-[180px] h-[180px] flex-shrink-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                paddingAngle={2}
-                dataKey="amount"
-                nameKey="category"
-                strokeWidth={0}
-              >
-                {data.map((entry, index) => (
-                  <Cell key={index} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip content={<DonutTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Legend */}
-        <div className="flex-1 space-y-2 w-full">
-          {data.slice(0, 6).map((item, i) => (
+      {/* Main Segmented Tracker - Hidden on mobile, shown sm+ */}
+      <div className="hidden sm:flex w-full h-8 rounded-full mb-6 bg-muted/20 flex-shrink-0 flex-nowrap p-1 gap-1 items-stretch shadow-inner">
+        {data.map((item) => (
+          <div
+            key={`segment-${item.category}`}
+            className="h-full relative group"
+            style={{ width: `${Math.max(item.percentage, 1)}%` }}
+            onMouseEnter={() => setHoveredCategory(item.category)}
+            onMouseLeave={() => setHoveredCategory(null)}
+          >
+            {/* The actual colored bar segment */}
             <motion.div
-              key={item.category}
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 + i * 0.05 }}
-              className="flex items-center justify-between text-xs"
-            >
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-                <span className="text-muted-foreground truncate">{item.category}</span>
+              className={cn(
+                "w-full h-full cursor-pointer transition-all duration-300 ease-out flex items-center justify-center",
+                "rounded-[4px] first-of-type:rounded-l-full last-of-type:rounded-r-full"
+              )}
+              style={{ backgroundColor: item.color }}
+              animate={{
+                opacity: hoveredCategory === null || hoveredCategory === item.category ? 1 : 0.25,
+                scaleY: hoveredCategory === item.category ? 1.25 : 1,
+              }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            />
+            
+            {/* High-Fidelity Tooltip on Hover */}
+            <AnimatePresence>
+              {hoveredCategory === item.category && (
+                <ChartTooltip item={item} />
+              )}
+            </AnimatePresence>
+          </div>
+        ))}
+      </div>
+
+      {/* Unified Data Pane (Scrollable area) */}
+      <div className="flex-1 overflow-y-auto pr-1 space-y-1.5 relative">
+        {data.map((item, i) => (
+          <motion.div
+            key={`list-${item.category}`}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 + (i * 0.03) }}
+            onMouseEnter={() => setHoveredCategory(item.category)}
+            onMouseLeave={() => setHoveredCategory(null)}
+            className={cn(
+              "p-2.5 rounded-xl transition-all duration-300 cursor-default border border-transparent",
+              hoveredCategory === item.category 
+                ? "bg-accent/80 border-accent shadow-sm translate-x-1" 
+                : "hover:bg-accent/40"
+            )}
+          >
+            <div className="flex justify-between items-center mb-2">
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                  style={{ backgroundColor: item.color, boxShadow: `0 0 8px ${item.color}40` }} 
+                />
+                <span className="text-[13px] font-medium tracking-tight truncate">{item.category}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-medium">{item.percentage}%</span>
-                <span className="text-muted-foreground font-mono">{formatINR(item.amount, true)}</span>
+              <div className="flex flex-col items-end">
+                <span className="text-[13px] font-mono font-semibold">
+                  {formatINR(item.amount, true)}
+                </span>
+                <span className="text-[11px] text-muted-foreground font-mono mt-0.5 tabular-nums">
+                  {item.percentage.toFixed(1)}%
+                </span>
               </div>
-            </motion.div>
-          ))}
-          {data.length > 6 && (
-            <p className="text-[10px] text-muted-foreground text-center mt-1">+{data.length - 6} more categories</p>
-          )}
-        </div>
+            </div>
+            
+            {/* Inline Mini Progress Bar */}
+            <div className="w-full bg-muted/40 rounded-full h-1.5 overflow-hidden mt-1">
+              <motion.div 
+                className="h-full rounded-full"
+                style={{ backgroundColor: item.color }}
+                initial={{ width: 0 }}
+                animate={{ width: `${item.percentage}%` }}
+                transition={{ duration: 0.8, ease: "easeOut", delay: i * 0.05 }}
+              />
+            </div>
+          </motion.div>
+        ))}
+        {/* End of list padding */}
+        <div className="p-1" />
       </div>
     </motion.div>
-  );
-}
-
-function DonutTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null;
-  const data = payload[0].payload;
-  return (
-    <div className="bg-popover border border-popover-border rounded-lg p-2.5 shadow-lg text-xs">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: data.color }} />
-        <span className="font-medium">{data.category}</span>
-      </div>
-      <p className="font-mono">{formatINR(data.amount)} ({data.percentage}%)</p>
-    </div>
   );
 }

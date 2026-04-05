@@ -100,10 +100,14 @@ export function CommandPalette() {
   // Focus input when opening
   useEffect(() => {
     if (open) {
+      document.body.style.overflow = 'hidden';
       setQuery('');
       setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 50);
+    } else {
+      document.body.style.overflow = '';
     }
+    return () => { document.body.style.overflow = ''; };
   }, [open]);
 
   // Keyboard navigation in list
@@ -153,16 +157,16 @@ export function CommandPalette() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
             onClick={() => setOpen(false)}
           />
 
           <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: -10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: -10 }}
+            initial={{ opacity: 0, scale: 0.96, x: "-50%", y: "-50%" }}
+            animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }}
+            exit={{ opacity: 0, scale: 0.96, x: "-50%", y: "-50%" }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            className="fixed left-1/2 top-[20%] -translate-x-1/2 w-[90%] max-w-lg bg-popover border border-popover-border rounded-xl shadow-2xl z-50 overflow-hidden"
+            className="fixed left-1/2 top-1/2 w-[90%] max-w-md bg-popover border border-popover-border rounded-xl shadow-2xl z-50 overflow-hidden"
             role="dialog"
             aria-label="Command palette"
             aria-modal="true"
