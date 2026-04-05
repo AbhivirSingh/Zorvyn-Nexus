@@ -7,8 +7,9 @@ import { CATEGORY_COLORS } from '../data/types';
  * Computes all financial KPIs from the transaction list.
  * Memoized to avoid recalculation on unrelated state changes.
  */
-export function useFinancialMetrics(): FinancialMetrics {
-  const transactions = useStore((s) => s.transactions);
+export function useFinancialMetrics(customTransactions?: Transaction[]): FinancialMetrics {
+  const allTransactions = useStore((s) => s.transactions);
+  const transactions = customTransactions || allTransactions;
 
   return useMemo(() => {
     const totalIncome = transactions
@@ -52,8 +53,9 @@ export function useFinancialMetrics(): FinancialMetrics {
  * Monthly income/expense/balance data for trend charts.
  * Returns last 6 months of aggregated data.
  */
-export function useMonthlyData(): MonthlyData[] {
-  const transactions = useStore((s) => s.transactions);
+export function useMonthlyData(customTransactions?: Transaction[]): MonthlyData[] {
+  const allTransactions = useStore((s) => s.transactions);
+  const transactions = customTransactions || allTransactions;
 
   return useMemo(() => {
     const monthMap = new Map<string, { income: number; expenses: number }>();
@@ -94,8 +96,9 @@ export function useMonthlyData(): MonthlyData[] {
 /**
  * Spending breakdown by category for pie/donut charts.
  */
-export function useCategoryBreakdown(): CategoryBreakdown[] {
-  const transactions = useStore((s) => s.transactions);
+export function useCategoryBreakdown(customTransactions?: Transaction[]): CategoryBreakdown[] {
+  const allTransactions = useStore((s) => s.transactions);
+  const transactions = customTransactions || allTransactions;
 
   return useMemo(() => {
     const categoryTotals = new Map<string, number>();
@@ -172,10 +175,11 @@ export function useFilteredTransactions(): Transaction[] {
 /**
  * Generates smart financial alerts based on transaction patterns.
  */
-export function useFinancialAlerts(): { id: string; type: 'warning' | 'info' | 'success'; title: string; message: string }[] {
-  const transactions = useStore((s) => s.transactions);
-  const metrics = useFinancialMetrics();
-  const categoryData = useCategoryBreakdown();
+export function useFinancialAlerts(customTransactions?: Transaction[]): { id: string; type: 'warning' | 'info' | 'success'; title: string; message: string }[] {
+  const allTransactions = useStore((s) => s.transactions);
+  const transactions = customTransactions || allTransactions;
+  const metrics = useFinancialMetrics(transactions);
+  const categoryData = useCategoryBreakdown(transactions);
 
   return useMemo(() => {
     const alerts: { id: string; type: 'warning' | 'info' | 'success'; title: string; message: string }[] = [];
@@ -251,4 +255,27 @@ export function useFinancialAlerts(): { id: string; type: 'warning' | 'info' | '
 
     return alerts;
   }, [transactions, metrics, categoryData]);
+}
+
+/**
+ * Filtered transactions strictly for the Insights page temporal navigation.
+ */
+export function useInsightsTransactions(): Transaction[] {
+  const transactions = useStore((s) => s.transactions);
+  const dateRange = useStore((s) => s.insightsDateRange);
+
+  return useMemo(() => {
+    if (!dateRange) return transactions;
+    const start = new Date(dateRange.start).getTime();
+    
+    // Create an end date shifted to the very end of that day (23:59:59) for inclusive filtering
+    const endDate = new Date(dateRange.end);
+    endDate.setHours(23, 59, 59, 999);
+    const end = endDate.getTime();
+    
+    return transactions.filter(t => {
+      const tDate = new Date(t.date).getTime();
+      return tDate >= start && tDate <= end;
+    });
+  }, [transactions, dateRange]);
 }

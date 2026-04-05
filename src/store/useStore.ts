@@ -55,6 +55,8 @@ interface FilterSlice {
   setSortBy: (sort: 'date' | 'amount') => void;
   sortDirection: 'asc' | 'desc';
   setSortDirection: (dir: 'asc' | 'desc') => void;
+  insightsDateRange: { start: string; end: string } | null;
+  setInsightsDateRange: (range: { start: string; end: string } | null) => void;
 }
 
 // ===== Combined Store =====
@@ -152,4 +154,6 @@ export const useStore = create<Store>((set, get) => ({
   setSortBy: (sort) => set({ sortBy: sort }),
   sortDirection: 'desc',
   setSortDirection: (dir) => set({ sortDirection: dir }),
+  insightsDateRange: null,
+  setInsightsDateRange: (range) => set({ insightsDateRange: range }),
 }));
